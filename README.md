@@ -1,7 +1,4 @@
 # Room Booking Service
-
-[![CI](https://github.com/zxchelik/room-booking-service/actions/workflows/ci.yml/badge.svg)](https://github.com/zxchelik/room-booking-service/actions/workflows/ci.yml)
-
 Backend-сервис для управления переговорными комнатами и бронирования временных слотов. Проект показывает полный путь запроса: HTTP API, бизнес-правила, работа с PostgreSQL, миграции и запуск в Docker Compose.
 
 ## Возможности
