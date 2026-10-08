@@ -1,0 +1,60 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# env file
+.env
+.env.*
+
+# Editor/IDE
+.idea/
+.vscode/
+
+# AI agents
+AGENTS.md
+AGENTS.override.md
+CLAUDE.md
+GEMINI.md
+copilot-instructions.md
+.mcp.json
+.agents/
+.codex/
+.github/agents/
+.github/instructions/
+.cursorrules
+.windsurfrules
+.aider*
+.claude/
+.cursor/
+.aider/
+.aider.chat.history.md
+.aider.input.history
+.copilot/
+.github/copilot/
+.codeium/
+.tabnine/
+.continue/
+.windsurfer/
+.roo/
+.roomodes
+.clinerules
+
+.DS_Store
+.gocache/
+.gopath/
+.golangci-cache/

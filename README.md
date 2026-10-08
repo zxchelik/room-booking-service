@@ -1,0 +1,116 @@
+# Room Booking Service
+
+[![CI](https://github.com/zxchelik/room-booking-service/actions/workflows/ci.yml/badge.svg)](https://github.com/zxchelik/room-booking-service/actions/workflows/ci.yml)
+
+Backend-сервис для управления переговорными комнатами и бронирования временных слотов. Проект показывает полный путь запроса: HTTP API, бизнес-правила, работа с PostgreSQL, миграции и запуск в Docker Compose.
+
+## Возможности
+
+- Регистрация и вход пользователей с JWT-аутентификацией.
+- Роли `admin` и `user`: управление комнатами и расписаниями, просмотр доступности, создание и отмена бронирований.
+- Предгенерация слотов на скользящее окно; при запросе доступности окно при необходимости пополняется.
+- Ограничения PostgreSQL защищают от пересекающихся слотов комнаты и повторного активного бронирования одного слота.
+- OpenAPI-спецификация и Swagger UI доступны вместе с сервисом.
+
+## Архитектура и стек
+
+Сервис разделён на HTTP-обработчики, бизнес-логику и репозитории. Пакет `internal/application` загружает конфигурацию, подключает PostgreSQL и связывает компоненты приложения.
+
+| Каталог | Назначение |
+| --- | --- |
+| `cmd/service` | HTTP-сервис |
+| `cmd/migrate` | Ручной запуск миграций |
+| `cmd/seed` | Создание демонстрационных пользователей и комнат |
+| `internal/handler` | Маршруты, HTTP-обработчики и middleware |
+| `internal/service` | Правила авторизации, расписаний, слотов и бронирований |
+| `internal/repository` | Доступ к PostgreSQL |
+| `migrations` | SQL-миграции, встроенные в приложение |
+
+Используются Go 1.25, PostgreSQL 16, chi, pgx, goose и JWT (`golang-jwt/jwt`).
+
+## Быстрый запуск
+
+Нужны Docker и Docker Compose.
+
+```bash
+cp configs/config.env.example .env
+docker compose --env-file .env up --build
+```
+
+После старта API доступен на <http://localhost:8080>, Swagger UI — на <http://localhost:8080/swagger>. Миграции автоматически применяются при `AUTO_MIGRATE=true` (значение по умолчанию).
+
+Для остановки контейнеров с сохранением данных используйте `make down`. Чтобы также удалить базу данных вместе с Docker-томом, используйте `make down-v`.
+
+## Авторизация
+
+Для обычного сценария создайте пользователя через `POST /register`, затем получите JWT через `POST /login`. В production публичная регистрация не может создавать `admin`; роль администратора доступна только в development/test. Для локальной демонстрации можно создать готовые учётные записи командой `make seed`:
+
+| Роль | Email | Пароль |
+| --- | --- | --- |
+| Администратор | `seed-admin@example.com` | `seed-admin-password` |
+| Пользователь | `seed-user@example.com` | `seed-user-password` |
+
+Команда seed идемпотентна и доступна только в development/test: повторный запуск не создаёт дубликаты пользователей и комнат. Используйте эти демонстрационные пароли только локально. `POST /dummyLogin` предназначен только для разработки и отключён в production.
+
+Запросы к защищённым маршрутам передают токен в заголовке `Authorization: Bearer <token>`. Например, чтобы получить токен пользователя:
+
+```bash
+curl -X POST http://localhost:8080/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"seed-user@example.com","password":"seed-user-password"}'
+```
+
+## API и документация
+
+- [OpenAPI 3 спецификация](api.yaml) — источник контрактов запросов и ответов.
+- [Swagger UI](http://localhost:8080/swagger) — интерактивная документация локально запущенного сервиса.
+- `GET /openapi.yaml` — спецификация, отдаваемая сервисом.
+- `GET /_info` — проверка доступности приложения.
+
+Основные группы маршрутов: `/register` и `/login`; `/rooms/*` для комнат, расписаний и слотов; `/bookings/*` для бронирований. Полный список методов, схем и ошибок см. в `api.yaml`.
+
+## Конфигурация
+
+Шаблон переменных окружения находится в [`configs/config.env.example`](configs/config.env.example). При Compose-запуске скопируйте его в `.env`; секреты и локальный `.env` не следует публиковать.
+
+| Переменная | Назначение | Значение по умолчанию |
+| --- | --- | --- |
+| `APP_ENV` | Окружение (`development`, `test`, `production`) | `development` |
+| `HTTP_PORT` | Порт HTTP-сервиса и локальная публикация Compose | `8080` |
+| `DATABASE_URL` | Полный PostgreSQL DSN; перекрывает составные параметры | пусто |
+| `DB_HOST`, `DB_PORT` | Хост и внутренний порт PostgreSQL | `db`, `5432` |
+| `DB_HOST_PORT` | Порт PostgreSQL на локальной машине | `5432` |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Имя базы, пользователь и пароль для локального Compose | `room_booking`, `room_booking`, `room_booking` |
+| `JWT_SECRET` | Секрет подписи JWT | В dev используется локальный секрет; в production обязателен секрет длиной не менее 32 байт |
+| `JWT_TTL` | Срок действия токена | `24h` |
+| `ENABLE_DUMMY_LOGIN` | Включить демонстрационный вход по роли | `true` в development/test, `false` в production |
+| `AUTO_MIGRATE` | Применять миграции при старте сервиса | `true` |
+| `SLOT_WINDOW_DAYS` | Горизонт генерации слотов | `14` |
+
+В production приложение отклоняет отсутствие или короткий `JWT_SECRET`, а также попытку включить `ENABLE_DUMMY_LOGIN`. Compose публикует сервис и PostgreSQL только на loopback-интерфейсе; его учётные данные предназначены для локальной разработки.
+
+## Миграции и данные
+
+Миграции применяются при запуске приложения, если `AUTO_MIGRATE=true`. Их также можно выполнить вручную (`make migrate`); создание демонстрационных данных выполняется через `make seed`. Обе команды Makefile рассчитаны на базу, доступную с хоста на `localhost:5432`.
+
+При локальном запуске без Compose нужен доступный PostgreSQL и подходящие значения `DATABASE_URL` либо `DB_*`:
+
+```bash
+go run ./cmd/migrate
+go run ./cmd/service
+```
+
+## Команды разработчика
+
+```bash
+make up       # собрать и запустить сервис и PostgreSQL
+make down     # остановить контейнеры, сохранив данные
+make down-v   # остановить контейнеры и удалить тома с данными
+make logs     # смотреть логи сервиса и PostgreSQL
+make test     # запустить Go-тесты
+make lint     # запустить golangci-lint
+make migrate  # применить миграции с хоста
+make seed     # заполнить локальную БД демонстрационными данными
+```
+
+E2E-тесты используют testcontainers-go и требуют доступный Docker. Запустить весь набор можно командой `go test ./...`.
